@@ -17,6 +17,7 @@ from .errors import (
     ValidationError,
     WorkgraphError,
 )
+from .models import Status
 from .service import Service
 
 # The surface partition (C-5). The execute group is a strict subset of read+execute, so an executor
@@ -71,7 +72,7 @@ def tool_handlers(service: Service) -> dict[str, Callable[[dict], dict]]:
     return {
         # read
         "wg_plan": lambda a: {"waves": service.plan()},
-        "wg_status": lambda a: service.status(a.get("id")),
+        "wg_status": lambda a: service.status(node_id=a.get("id"), status=a.get("status")),
         "wg_show": lambda a: service.show(a["id"]),
         "wg_ready": lambda a: {"ready": service.ready()},
         # execute
@@ -132,7 +133,16 @@ def tool_schemas() -> dict[str, dict]:
     _id = {"id": dict(_STR, description="node id")}
     return {
         "wg_plan": _obj({}),
-        "wg_status": _obj({"id": {"type": "string", "description": "omit for the project rollup"}}),
+        "wg_status": _obj(
+            {
+                "id": {"type": "string", "description": "a node id — its summary (omit for the project rollup)"},
+                "status": {
+                    "type": "string",
+                    "enum": [s.value for s in Status],
+                    "description": "return the ids of all nodes in this state",
+                },
+            }
+        ),
         "wg_show": _obj(_id, ("id",)),
         "wg_ready": _obj({}),
         "wg_claim": _obj(_id, ("id",)),
@@ -154,26 +164,104 @@ def tool_schemas() -> dict[str, dict]:
 
 
 _DESCRIPTIONS = {
-    "wg_plan": "Return the orchestration plan: nodes grouped into ordered concurrent waves.",
-    "wg_status": "Status: a project rollup (no id) or one node's summary (id).",
-    "wg_show": "Full detail for one node.",
-    "wg_ready": "Ids of nodes currently ready to claim.",
-    "wg_claim": "Claim a ready node (ready -> active).",
-    "wg_verify": "Run a command node's gate; on exit 0 -> awaiting-signoff.",
-    "wg_request_signoff": "Mark a manual node's work ready for operator review.",
-    "wg_reverify": "Return an awaiting-signoff node to active to re-run its gate.",
-    "wg_report_blocked": "Mark a node blocked.",
-    "wg_ingest": "Declare a batch of nodes+deps atomically (forward refs allowed).",
-    "wg_add_node": "Add a single node (enters triage).",
-    "wg_set_gate": "Set/modify a node's gate (triage only).",
-    "wg_add_dep": "Add a dependency edge (triage only).",
-    "wg_remove_node": "Remove a triage node with no dependents.",
-    "wg_signoff": "Operator sign-off: awaiting-signoff -> done.",
-    "wg_resolve": "Resolve a none-gate node (records a rationale).",
-    "wg_defer": "Defer a node (terminal, distinct from done).",
-    "wg_unblock": "Unblock a node (re-enters readiness recompute).",
-    "wg_archive": "Archive a terminal node.",
+    "wg_plan": (
+        "Return the orchestration plan: all nodes grouped into ordered concurrent waves. Nodes in "
+        "the same wave have no dependency between them and can run in parallel; a node appears only "
+        "after every node it depends on. Read-only."
+    ),
+    "wg_status": (
+        "Answer 'where are we'. No argument -> a project rollup (counts of nodes by status, grouped "
+        "by parent). `id` -> that node's summary (status, gate kind, last verify, sign-off, child "
+        "rollup). `status` -> the ids of all nodes in that state. Read-only; never returns node bodies."
+    ),
+    "wg_show": (
+        "Return full detail for one node: deps, gate (incl. command), rationale path, sign-off, and "
+        "last-verify summary. Read-only."
+    ),
+    "wg_ready": (
+        "Return the ids of nodes currently in `ready` — their dependencies are all terminal-good and "
+        "they can be claimed. Read-only."
+    ),
+    "wg_claim": "Claim a `ready` node to start work on it (ready -> active). Execute surface.",
+    "wg_verify": (
+        "Run a `command`-gate node's gate command; the node must be `active`. On exit 0 it advances "
+        "to `awaiting-signoff` and the run is recorded as evidence; on non-zero or timeout it stays "
+        "`active` and the captured output is returned. Executes an arbitrary shell command in the "
+        "store's working directory. Execute surface."
+    ),
+    "wg_request_signoff": (
+        "For a `manual`-gate node, mark the executor's work ready for the operator to review "
+        "(active -> awaiting-signoff). There is no command to run; the human vouch comes at sign-off. "
+        "Execute surface."
+    ),
+    "wg_reverify": (
+        "Return an `awaiting-signoff` node to `active` to re-run its gate when the evidence is stale "
+        "(clears the recorded verify). Use before sign-off if the verified tree changed. Execute surface."
+    ),
+    "wg_report_blocked": (
+        "Mark a node `blocked` (e.g. its gate keeps failing or a prerequisite was abandoned). "
+        "Reversible via wg_unblock. Execute or operator surface."
+    ),
+    "wg_ingest": (
+        "Declare a batch of nodes with their dependencies atomically (all-or-nothing). Deps may "
+        "reference sibling nodes in the same batch, so a connected graph can be declared in any order. "
+        "New nodes enter `triage`. Plan/operator surface."
+    ),
+    "wg_add_node": (
+        "Add a single node (enters `triage`). Prefer wg_ingest to declare a connected graph in one "
+        "call. Plan/operator surface."
+    ),
+    "wg_set_gate": (
+        "Set or modify a node's gate. Allowed only while the node is in `triage` — gates lock once a "
+        "node becomes `ready` (the gate-authorship clamp). Plan/operator surface."
+    ),
+    "wg_add_dep": (
+        "Add a dependency edge to a node. Allowed only while the node is in `triage`. Plan/operator surface."
+    ),
+    "wg_remove_node": (
+        "Delete a node. Allowed only if it is in `triage` and no other node depends on it; never "
+        "leaves a dangling reference. To retire started work use wg_defer/wg_archive. Plan/operator surface."
+    ),
+    "wg_signoff": (
+        "Record the human operator's sign-off, moving an `awaiting-signoff` node to `done`. This is "
+        "the ONLY transition into `done` and is plan/operator-only — an executor cannot reach `done`. "
+        "Requires `who` (the human vouching); call only on the human's explicit instruction after the "
+        "evidence is surfaced. Plan/operator surface."
+    ),
+    "wg_resolve": (
+        "Resolve a `none`-gate (decision/coordination) node, recording the outcome as its rationale "
+        "(ready/active -> resolved). A none-gate node reaches `resolved`, never `done`. Plan/operator surface."
+    ),
+    "wg_defer": (
+        "Move a non-terminal node to `deferred` — a terminal state structurally distinct from `done` "
+        "(deferred work can never be mistaken for finished). Plan/operator surface."
+    ),
+    "wg_unblock": (
+        "Clear a `blocked` node and re-evaluate readiness: it returns to `ready` if its deps are "
+        "terminal-good, otherwise stays `blocked`. Plan/operator surface."
+    ),
+    "wg_archive": (
+        "Archive a terminal node, dropping it from the active set while keeping it queryable. "
+        "Plan/operator surface."
+    ),
 }
+
+
+def tool_descriptions() -> dict[str, str]:
+    """One-paragraph, onboard-a-new-hire descriptions stating each tool's precondition + effect."""
+    return dict(_DESCRIPTIONS)
+
+
+def tool_annotations() -> dict[str, dict]:
+    """MCP tool annotations (read-only / destructive / open-world hints) so the client can present
+    risk and approval appropriately. Reads are read-only; `wg_verify` runs an arbitrary command
+    (open-world); `wg_remove_node` deletes (destructive)."""
+    ann: dict[str, dict] = {t: {"readOnlyHint": True, "openWorldHint": False} for t in READ_TOOLS}
+    for t in EXECUTE_TOOLS + PLAN_TOOLS:
+        ann[t] = {"readOnlyHint": False}
+    ann["wg_verify"] = {"readOnlyHint": False, "openWorldHint": True}
+    ann["wg_remove_node"] = {"readOnlyHint": False, "destructiveHint": True}
+    return ann
 
 
 def build_server(store_root: str):
@@ -184,6 +272,8 @@ def build_server(store_root: str):
     service = Service(store_root)
     handlers = tool_handlers(service)
     schemas = tool_schemas()
+    descriptions = tool_descriptions()
+    annotations = tool_annotations()
     server = Server("workgraph")
 
     @server.list_tools()
@@ -191,8 +281,9 @@ def build_server(store_root: str):
         return [
             types.Tool(
                 name=name,
-                description=_DESCRIPTIONS.get(name, name),
+                description=descriptions[name],
                 inputSchema=schemas[name],
+                annotations=types.ToolAnnotations(**annotations[name]),
             )
             for name in handlers
         ]

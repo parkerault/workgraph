@@ -46,6 +46,9 @@ async def _round_trip(root: str) -> dict:
             ingest_schema = by_name["wg_ingest"].inputSchema
             assert ingest_schema["properties"]["nodes"]["type"] == "array"
             assert "nodes" in ingest_schema.get("required", [])
+            # annotations travel over the wire (read-only / destructive hints)
+            assert by_name["wg_plan"].annotations.readOnlyHint is True
+            assert by_name["wg_remove_node"].annotations.destructiveHint is True
 
             await session.call_tool(
                 "wg_ingest",

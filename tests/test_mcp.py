@@ -35,6 +35,32 @@ def test_tool_schemas_cover_every_tool():
     assert set(schemas) == set(READ_TOOLS) | set(EXECUTE_TOOLS) | set(PLAN_TOOLS)
 
 
+def test_tool_annotations_classify_read_destructive_openworld():
+    from workgraph.mcp_server import tool_annotations
+
+    a = tool_annotations()
+    assert set(a) == set(READ_TOOLS) | set(EXECUTE_TOOLS) | set(PLAN_TOOLS)
+    for t in READ_TOOLS:
+        assert a[t]["readOnlyHint"] is True
+    for t in set(EXECUTE_TOOLS) | set(PLAN_TOOLS):
+        assert a[t].get("readOnlyHint") is False
+    assert a["wg_verify"]["openWorldHint"] is True  # runs an arbitrary shell command
+    assert a["wg_remove_node"]["destructiveHint"] is True
+
+
+def test_descriptions_are_substantive_and_state_key_constraints():
+    from workgraph.mcp_server import tool_descriptions
+
+    d = tool_descriptions()
+    assert set(d) == set(READ_TOOLS) | set(EXECUTE_TOOLS) | set(PLAN_TOOLS)
+    for name, text in d.items():
+        assert len(text) >= 40, name  # not a one-word stub
+    assert "done" in d["wg_signoff"].lower()  # the defining constraint of each
+    assert "active" in d["wg_verify"].lower()
+    assert "triage" in d["wg_set_gate"].lower()
+    assert "deferred" in d["wg_defer"].lower()
+
+
 def test_structured_arg_tools_declare_typed_properties():
     """Regression: a property-less object schema makes the harness string-encode array/object args."""
     from workgraph.mcp_server import tool_schemas

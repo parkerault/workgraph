@@ -90,6 +90,15 @@ def test_status_parent_reports_child_rollup(tmp_path):
     assert st["children"]  # rollup present for a parent
 
 
+def test_status_filter_returns_ids_in_that_state(tmp_path):
+    s = svc(tmp_path)
+    s.ingest([_node("a"), _node("b", deps=["a"])])  # a -> ready, b -> triage
+    out = s.status(status="ready")
+    assert out["status"] == "ready" and out["ids"] == ["a"]
+    assert s.status(status="triage")["ids"] == ["b"]
+    assert s.status(status="done")["ids"] == []  # empty, not an error
+
+
 # ---- command gate happy path (AC-6, AC-7, AC-8) ----------------------------
 
 def test_verify_pass_then_signoff_reaches_done(tmp_path):
