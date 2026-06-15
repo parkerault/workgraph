@@ -1,0 +1,76 @@
+"""C-5 MCP binding — surface split (AC-11/AC-12), error envelope, handler wiring."""
+
+from __future__ import annotations
+
+from workgraph import mcp_server as M
+from workgraph import store
+from workgraph.errors import (
+    ConcurrencyError,
+    IllegalTransition,
+    SurfaceDenied,
+    ValidationError,
+)
+from workgraph.mcp_server import (
+    EXECUTE_TOOLS,
+    PLAN_TOOLS,
+    READ_TOOLS,
+    error_envelope,
+    tool_handlers,
+    tool_manifest,
+)
+from workgraph.service import Service
+
+
+def test_surface_groups_partition_all_tools():
+    m = tool_manifest()
+    assert set(m["read"]).isdisjoint(m["execute"])
+    assert set(m["execute"]).isdisjoint(m["plan"])
+    assert set(m["read"]).isdisjoint(m["plan"])
+
+
+def test_execute_group_excludes_authorship_and_signoff():
+    """AC-11/AC-12 — the execute surface can't create nodes, set gates, add deps, or sign off."""
+    forbidden = {
+        "wg_ingest",
+        "wg_add_node",
+        "wg_set_gate",
+        "wg_add_dep",
+        "wg_remove_node",
+        "wg_signoff",
+        "wg_resolve",
+        "wg_defer",
+        "wg_unblock",
+        "wg_archive",
+    }
+    assert set(EXECUTE_TOOLS).isdisjoint(forbidden)
+    assert "wg_signoff" not in EXECUTE_TOOLS  # the only door to `done` is plan-only
+
+
+def test_handlers_cover_exactly_the_manifest(tmp_path):
+    store.init_store(str(tmp_path))
+    handlers = tool_handlers(Service(str(tmp_path)))
+    assert set(handlers) == set(READ_TOOLS) | set(EXECUTE_TOOLS) | set(PLAN_TOOLS)
+
+
+def test_plan_handler_returns_waves(tmp_path):
+    store.init_store(str(tmp_path))
+    s = Service(str(tmp_path))
+    s.ingest([{"id": "a", "gate": {"kind": "none"}}])
+    handlers = tool_handlers(s)
+    assert handlers["wg_plan"]({}) == {"waves": [["a"]]}
+
+
+def test_error_envelope_maps_each_error_type():
+    assert error_envelope(ConcurrencyError("x"))["retry"] is True
+    it = error_envelope(IllegalTransition("a", "ready", ["claim"]))
+    assert it["error"] == "illegal_transition" and it["current"] == "ready"
+    assert it["allowed"] == ["claim"]
+    sd = error_envelope(SurfaceDenied("signoff", "execute"))
+    assert sd["action"] == "signoff" and sd["surface"] == "execute"
+    ve = error_envelope(ValidationError("a", "deps", "bad"))
+    assert ve["node"] == "a" and ve["field"] == "deps"
+
+
+def test_build_server_constructs(tmp_path):
+    store.init_store(str(tmp_path))
+    assert M.build_server(str(tmp_path)) is not None

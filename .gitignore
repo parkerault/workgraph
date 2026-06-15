@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# workgraph: gate-run logs are ephemeral evidence, never tracked
+.workgraph/runs/*
+!.workgraph/runs/.gitignore
