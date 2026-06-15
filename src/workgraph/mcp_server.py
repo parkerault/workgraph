@@ -94,6 +94,65 @@ def tool_handlers(service: Service) -> dict[str, Callable[[dict], dict]]:
     }
 
 
+_STR = {"type": "string"}
+
+_GATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kind": {"type": "string", "enum": ["command", "manual", "none"]},
+        "command": {"type": "string", "description": "shell command; required iff kind == command"},
+        "timeout": {"type": "integer", "description": "gate timeout in seconds (optional)"},
+    },
+    "required": ["kind"],
+}
+
+_NODE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string", "description": "stable kebab id"},
+        "kind": {"type": "string", "description": "free-form project string (milestone|epic|unit|decision|…)"},
+        "parent": {"type": "string", "description": "membership only — NOT a dependency"},
+        "deps": {"type": "array", "items": {"type": "string"}, "description": "ids this node depends on"},
+        "gate": _GATE_SCHEMA,
+    },
+    "required": ["id", "gate"],
+}
+
+
+def _obj(properties: dict, required: tuple[str, ...] = ()) -> dict:
+    # No additionalProperties:false — match the in-harness-verified minimal form; the point is
+    # typed properties so structured args aren't string-encoded, not strict rejection of extras.
+    return {"type": "object", "properties": properties, "required": list(required)}
+
+
+def tool_schemas() -> dict[str, dict]:
+    """Per-tool JSON-Schema `inputSchema`. Typed properties are REQUIRED — a property-less object
+    schema makes Claude Code string-encode array/object args (e.g. `nodes`), which the server then
+    iterates character-by-character. Keep this in sync with `tool_handlers` arg access."""
+    _id = {"id": dict(_STR, description="node id")}
+    return {
+        "wg_plan": _obj({}),
+        "wg_status": _obj({"id": {"type": "string", "description": "omit for the project rollup"}}),
+        "wg_show": _obj(_id, ("id",)),
+        "wg_ready": _obj({}),
+        "wg_claim": _obj(_id, ("id",)),
+        "wg_verify": _obj(_id, ("id",)),
+        "wg_request_signoff": _obj({"id": _STR, "note": _STR}, ("id",)),
+        "wg_reverify": _obj(_id, ("id",)),
+        "wg_report_blocked": _obj(_id, ("id",)),
+        "wg_ingest": _obj({"nodes": {"type": "array", "items": _NODE_SCHEMA}}, ("nodes",)),
+        "wg_add_node": _obj({"node": _NODE_SCHEMA}, ("node",)),
+        "wg_set_gate": _obj({"id": _STR, "gate": _GATE_SCHEMA}, ("id", "gate")),
+        "wg_add_dep": _obj({"id": _STR, "dep": dict(_STR, description="dependency id")}, ("id", "dep")),
+        "wg_remove_node": _obj(_id, ("id",)),
+        "wg_signoff": _obj({"id": _STR, "who": _STR, "note": _STR}, ("id", "who")),
+        "wg_resolve": _obj({"id": _STR, "rationale": _STR}, ("id", "rationale")),
+        "wg_defer": _obj(_id, ("id",)),
+        "wg_unblock": _obj(_id, ("id",)),
+        "wg_archive": _obj(_id, ("id",)),
+    }
+
+
 _DESCRIPTIONS = {
     "wg_plan": "Return the orchestration plan: nodes grouped into ordered concurrent waves.",
     "wg_status": "Status: a project rollup (no id) or one node's summary (id).",
@@ -124,6 +183,7 @@ def build_server(store_root: str):
 
     service = Service(store_root)
     handlers = tool_handlers(service)
+    schemas = tool_schemas()
     server = Server("workgraph")
 
     @server.list_tools()
@@ -132,7 +192,7 @@ def build_server(store_root: str):
             types.Tool(
                 name=name,
                 description=_DESCRIPTIONS.get(name, name),
-                inputSchema={"type": "object", "additionalProperties": True},
+                inputSchema=schemas[name],
             )
             for name in handlers
         ]

@@ -28,6 +28,32 @@ def test_surface_groups_partition_all_tools():
     assert set(m["read"]).isdisjoint(m["plan"])
 
 
+def test_tool_schemas_cover_every_tool():
+    from workgraph.mcp_server import tool_schemas
+
+    schemas = tool_schemas()
+    assert set(schemas) == set(READ_TOOLS) | set(EXECUTE_TOOLS) | set(PLAN_TOOLS)
+
+
+def test_structured_arg_tools_declare_typed_properties():
+    """Regression: a property-less object schema makes the harness string-encode array/object args."""
+    from workgraph.mcp_server import tool_schemas
+
+    s = tool_schemas()
+    # the args that broke in-harness must be typed, not opaque objects
+    assert s["wg_ingest"]["properties"]["nodes"]["type"] == "array"
+    assert "nodes" in s["wg_ingest"]["required"]
+    assert s["wg_add_node"]["properties"]["node"]["type"] == "object"
+    assert "node" in s["wg_add_node"]["required"]
+    assert s["wg_set_gate"]["properties"]["gate"]["type"] == "object"
+    # every id-taking tool declares id:string
+    for t in ("wg_show", "wg_claim", "wg_verify", "wg_signoff", "wg_set_gate", "wg_add_dep", "wg_resolve"):
+        assert s[t]["properties"]["id"]["type"] == "string"
+    # no tool may fall back to a property-less schema (the original bug)
+    for name, sch in s.items():
+        assert "properties" in sch and isinstance(sch["properties"], dict)
+
+
 def test_execute_group_excludes_authorship_and_signoff():
     """AC-11/AC-12 — the execute surface can't create nodes, set gates, add deps, or sign off."""
     forbidden = {

@@ -40,6 +40,13 @@ async def _round_trip(root: str) -> dict:
 
             assert names == set(READ_TOOLS) | set(EXECUTE_TOOLS) | set(PLAN_TOOLS)
 
+            # The advertised schema must type structured args (else the harness string-encodes
+            # them and the server iterates the string char-by-char). Check it over the real wire.
+            by_name = {t.name: t for t in listed.tools}
+            ingest_schema = by_name["wg_ingest"].inputSchema
+            assert ingest_schema["properties"]["nodes"]["type"] == "array"
+            assert "nodes" in ingest_schema.get("required", [])
+
             await session.call_tool(
                 "wg_ingest",
                 {
