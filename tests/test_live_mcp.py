@@ -33,8 +33,12 @@ async def _round_trip(root: str) -> dict:
 
             listed = await session.list_tools()
             names = {t.name for t in listed.tools}
-            assert "wg_signoff" in names and "wg_plan" in names
-            assert len(names) == 19, sorted(names)
+            # The live server must expose exactly the declared tool groups — this catches
+            # handler/group drift (tool_handlers vs READ/EXECUTE/PLAN_TOOLS) over the real wire,
+            # and isn't brittle to an intentional tool add/remove the way a hardcoded count is.
+            from workgraph.mcp_server import EXECUTE_TOOLS, PLAN_TOOLS, READ_TOOLS
+
+            assert names == set(READ_TOOLS) | set(EXECUTE_TOOLS) | set(PLAN_TOOLS)
 
             await session.call_tool(
                 "wg_ingest",
@@ -66,5 +70,7 @@ def test_live_mcp_stdio_round_trip(tmp_path):
     async def runner():
         return await asyncio.wait_for(_round_trip(str(tmp_path)), timeout=30)
 
+    from workgraph.mcp_server import EXECUTE_TOOLS, PLAN_TOOLS, READ_TOOLS
+
     result = asyncio.run(runner())
-    assert result["tools"] == 19
+    assert result["tools"] == len(READ_TOOLS) + len(EXECUTE_TOOLS) + len(PLAN_TOOLS)
