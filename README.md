@@ -12,6 +12,52 @@ See [`SPEC.md`](SPEC.md) for the full specification.
 
 Under construction (alpha). Core engine → MCP surface → e2e. Built test-first.
 
+## Install
+
+Requires [`uv`](https://docs.astral.sh/uv/) (and Python 3.13, which `uv`/`mise` can provide). The
+repo lives at `~/projects/workgraph` in the examples below.
+
+**Option A — run without installing** (what the MCP config below uses; nothing lands on your PATH):
+
+```sh
+uv run --project ~/projects/workgraph workgraph --help
+```
+
+**Option B — install a global `workgraph` command:**
+
+```sh
+uv tool install --editable ~/projects/workgraph     # tracks src; or drop --editable for a snapshot
+# from git instead of a local clone:
+uv tool install git+ssh://git@github.com/parkerault/workgraph.git
+workgraph --help                                    # now on PATH (~/.local/bin)
+```
+
+**Use it in a project.** Scaffold a store, then register the MCP server with Claude Code so the
+coordinator drives it. A project-scoped `.mcp.json` points the server at that project's store via
+`${CLAUDE_PROJECT_DIR}`:
+
+```sh
+cd /path/to/your/project
+uv run --project ~/projects/workgraph workgraph init .     # creates ./.workgraph/
+```
+
+```json
+// .mcp.json
+{
+  "mcpServers": {
+    "workgraph": {
+      "command": "uv",
+      "args": ["run", "--project", "/home/parker/projects/workgraph", "workgraph", "serve", "${CLAUDE_PROJECT_DIR:-.}"]
+    }
+  }
+}
+```
+
+Reconnect the session (`/mcp`) to confirm `workgraph` is connected, then see
+[The surface split](#the-surface-split-governance) to restrict wave agents to the read+execute
+tools. (Launch the session from a `mise`-activated shell so gate commands inherit `uv`/python on
+PATH.)
+
 ## Develop
 
 ```sh
