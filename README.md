@@ -77,17 +77,25 @@ uv run workgraph serve       # launch the MCP server over stdio
 
 `workgraph` emits **mermaid** text for the graph (or a slice), with each node's status baked into
 its label. It never renders the diagram itself — the caller pipes the text to a renderer of its
-choice. Over MCP this is the read-only `wg_mermaid` tool; from the shell:
+choice. Over MCP this is the read-only `wg_mermaid` tool; from the shell, run it **from the project
+whose graph you want to see** (the directory holding `.workgraph/`):
 
 ```sh
-# whole graph
-uv run workgraph mermaid | mermaid-ascii --ascii
+# Launch workgraph the same way as in Install. If you `uv tool install`ed it (Option B):
+workgraph mermaid | mermaid-ascii --ascii
+# …or, without a global install, point uv at the repo (Option A) — note `--project` keeps your
+# current directory, so workgraph still reads *this* project's ./.workgraph/:
+uv run --project ~/projects/workgraph workgraph mermaid | mermaid-ascii --ascii
 
 # slices: a milestone's children · the active frontier · one node's neighborhood
-uv run workgraph mermaid --parent m-foundation | mermaid-ascii --ascii
-uv run workgraph mermaid --status active       | mermaid-ascii --ascii
-uv run workgraph mermaid --node build-core --depth 1
+workgraph mermaid --parent m-foundation | mermaid-ascii --ascii
+workgraph mermaid --status active        | mermaid-ascii --ascii
+workgraph mermaid --node build-core --depth 1
 ```
+
+It reads `./.workgraph/` by default; point it at another store with a path argument
+(`workgraph mermaid /path/to/project`). (Bare `uv run workgraph …` only works *inside* the workgraph
+repo — from any other project use one of the two launch forms above.)
 
 The raw mermaid renders richly on GitHub and mermaid.live too; [`mermaid-ascii`](https://github.com/AlexanderGrooff/mermaid-ascii)
 is just the terminal renderer. Prefer slices for large graphs (the ASCII renderer doesn't wrap to
