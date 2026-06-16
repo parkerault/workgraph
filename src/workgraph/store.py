@@ -80,6 +80,8 @@ def _node_from_dict(d: object) -> Node:
         rationale=d.get("rationale"),
         signoff=signoff,
         last_verify=last_verify,
+        updated_at=d.get("updated_at"),
+        updated_by=d.get("updated_by"),
     )
 
 
@@ -108,6 +110,10 @@ def _node_to_dict(n: Node) -> dict:
         if n.last_verify.log is not None:
             lv["log"] = n.last_verify.log
         d["last_verify"] = lv
+    if n.updated_at is not None:
+        d["updated_at"] = n.updated_at
+    if n.updated_by is not None:
+        d["updated_by"] = n.updated_by
     return d
 
 

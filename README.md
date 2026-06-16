@@ -94,6 +94,18 @@ is just the terminal renderer. Prefer slices for large graphs (the ASCII rendere
 terminal width), and embed the mermaid (not the ASCII) in committed docs — it diffs cleanly and
 renders in-place.
 
+## Provenance
+
+Every transition stamps the touched node with `updated_at` and `updated_by`. Pass `who` on any
+mutating tool/CLI call to record the actor — suggested convention:
+
+- **Humans:** a handle — `parker`.
+- **Agents:** your role, optionally with context — `coordinator`, `wg-executor`, or
+  `wg-executor:build-api` (`role:node`) for traceability.
+
+If omitted, `who` falls back to the calling surface (`plan` / `execute`), so it's never empty.
+`signoff` remains the distinct human vouch that opens `done`.
+
 ## The surface split (governance)
 
 `workgraph` exposes three tool groups — **read**, **execute**, **plan/operator**. The gate-authorship

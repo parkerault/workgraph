@@ -26,6 +26,15 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _stamp(graph, node_id: str, who: str | None, surface: str) -> None:
+    """Record provenance on a node: when it was last changed, and by whom (the caller-supplied
+    actor — a human handle or an agent role/task — falling back to the surface if unspecified)."""
+    n = graph.nodes.get(node_id)
+    if n is not None:
+        n.updated_at = _now()
+        n.updated_by = who or surface
+
+
 class Service:
     def __init__(self, store_root: str):
         self.root = store_root
@@ -58,6 +67,10 @@ class Service:
             "kind": n.kind,
             "gate_kind": n.gate.kind.value,
         }
+        if n.updated_at is not None:
+            out["updated_at"] = n.updated_at
+        if n.updated_by is not None:
+            out["updated_by"] = n.updated_by
         if n.last_verify is not None:
             out["last_verify"] = {
                 "exit_code": n.last_verify.exit_code,
@@ -118,7 +131,7 @@ class Service:
 
     # ----- declaration (plan surface) ----------------------------------------
 
-    def ingest(self, nodes: list[dict], surface: str = "plan") -> dict:
+    def ingest(self, nodes: list[dict], who: str | None = None, surface: str = "plan") -> dict:
         if surface != L.PLAN:
             from .errors import SurfaceDenied
 
@@ -133,17 +146,20 @@ class Service:
             g.nodes[node.id] = node
             ingested.append(node.id)
         L.recompute_readiness(g)
+        for nid in ingested:
+            _stamp(g, nid, who, surface)
         store.save(self.root, g, h)  # validates refs + cycle atomically (store unchanged on error)
         return {"ingested": ingested}
 
-    def add_node(self, node: dict, surface: str = "plan") -> dict:
+    def add_node(self, node: dict, who: str | None = None, surface: str = "plan") -> dict:
         g, h = store.load(self.root)
         new = store._node_from_dict(node)
         g2 = L.add_node(g, new, surface)
+        _stamp(g2, new.id, who, surface)
         store.save(self.root, g2, h)
         return self.status(new.id)
 
-    def set_gate(self, node_id: str, gate: dict, surface: str = "plan") -> dict:
+    def set_gate(self, node_id: str, gate: dict, who: str | None = None, surface: str = "plan") -> dict:
         g, h = store.load(self.root)
         gobj = Gate(
             kind=GateKind(gate["kind"]),
@@ -151,24 +167,25 @@ class Service:
             timeout=gate.get("timeout"),
         )
         g2 = L.transition(g, node_id, "set_gate", surface, gate=gobj)
+        _stamp(g2, node_id, who, surface)
         store.save(self.root, g2, h)
         return self.status(node_id)
 
-    def add_dep(self, node_id: str, dep: str, surface: str = "plan") -> dict:
-        return self._txn(node_id, "add_dep", surface, dep=dep)
+    def add_dep(self, node_id: str, dep: str, who: str | None = None, surface: str = "plan") -> dict:
+        return self._txn(node_id, "add_dep", surface, who=who, dep=dep)
 
-    def remove_node(self, node_id: str, surface: str = "plan") -> dict:
+    def remove_node(self, node_id: str, who: str | None = None, surface: str = "plan") -> dict:
         g, h = store.load(self.root)
-        g2 = L.transition(g, node_id, "remove", surface)
+        g2 = L.transition(g, node_id, "remove", surface)  # who: node is gone, nothing to stamp
         store.save(self.root, g2, h)
         return {"removed": node_id}
 
     # ----- execution (execute surface) ---------------------------------------
 
-    def claim(self, node_id: str, surface: str = "execute") -> dict:
-        return self._txn(node_id, "claim", surface)
+    def claim(self, node_id: str, who: str | None = None, surface: str = "execute") -> dict:
+        return self._txn(node_id, "claim", surface, who=who)
 
-    def verify(self, node_id: str, surface: str = "execute") -> dict:
+    def verify(self, node_id: str, who: str | None = None, surface: str = "execute") -> dict:
         g, h = store.load(self.root)
         n = self._require(g, node_id)
         if n.gate.kind != GateKind.COMMAND:
@@ -186,9 +203,11 @@ class Service:
         n.last_verify = LastVerify(exit_code=result.exit_code, ran_at=_now(), log=log_rel)
         if result.exit_code == 0:
             g2 = L.transition(g, node_id, "pass_gate", surface)  # carries last_verify forward
+            _stamp(g2, node_id, who, surface)
             store.save(self.root, g2, h)
             new_status = "awaiting-signoff"
         else:
+            _stamp(g, node_id, who, surface)
             store.save(self.root, g, h)  # evidence recorded; stays active (AC-7)
             new_status = "active"
         return {
@@ -198,47 +217,52 @@ class Service:
             "log": log_rel,
         }
 
-    def request_signoff(self, node_id: str, note: str | None = None, surface: str = "execute") -> dict:
-        out = self._txn(node_id, "request_signoff", surface)
+    def request_signoff(
+        self, node_id: str, note: str | None = None, who: str | None = None, surface: str = "execute"
+    ) -> dict:
+        out = self._txn(node_id, "request_signoff", surface, who=who)
         if note:
             store.write_rationale(self.root, node_id, note)
         return out
 
-    def reverify(self, node_id: str, surface: str = "execute") -> dict:
-        return self._txn(node_id, "reverify", surface)
+    def reverify(self, node_id: str, who: str | None = None, surface: str = "execute") -> dict:
+        return self._txn(node_id, "reverify", surface, who=who)
 
-    def report_blocked(self, node_id: str, surface: str = "execute") -> dict:
-        return self._txn(node_id, "block", surface)
+    def report_blocked(self, node_id: str, who: str | None = None, surface: str = "execute") -> dict:
+        return self._txn(node_id, "block", surface, who=who)
 
     # ----- operator transitions (plan surface) -------------------------------
 
     def signoff(self, node_id: str, who: str, note: str | None = None, surface: str = "plan") -> dict:
         g, h = store.load(self.root)
         g2 = L.transition(g, node_id, "signoff", surface, who=who, at=_now(), note=note)
+        _stamp(g2, node_id, who, surface)
         store.save(self.root, g2, h)
         return self.status(node_id)
 
-    def resolve(self, node_id: str, rationale: str, surface: str = "plan") -> dict:
+    def resolve(self, node_id: str, rationale: str, who: str | None = None, surface: str = "plan") -> dict:
         store.write_rationale(self.root, node_id, rationale)  # sets the field
         g, h = store.load(self.root)
         g2 = L.transition(g, node_id, "resolve", surface)
+        _stamp(g2, node_id, who, surface)
         store.save(self.root, g2, h)
         return self.status(node_id)
 
-    def defer(self, node_id: str, surface: str = "plan") -> dict:
-        return self._txn(node_id, "defer", surface)
+    def defer(self, node_id: str, who: str | None = None, surface: str = "plan") -> dict:
+        return self._txn(node_id, "defer", surface, who=who)
 
-    def unblock(self, node_id: str, surface: str = "plan") -> dict:
-        return self._txn(node_id, "unblock", surface)
+    def unblock(self, node_id: str, who: str | None = None, surface: str = "plan") -> dict:
+        return self._txn(node_id, "unblock", surface, who=who)
 
-    def archive(self, node_id: str, surface: str = "plan") -> dict:
-        return self._txn(node_id, "archive", surface)
+    def archive(self, node_id: str, who: str | None = None, surface: str = "plan") -> dict:
+        return self._txn(node_id, "archive", surface, who=who)
 
     # ----- helpers -----------------------------------------------------------
 
-    def _txn(self, node_id: str, action: str, surface: str, **args) -> dict:
+    def _txn(self, node_id: str, action: str, surface: str, who: str | None = None, **args) -> dict:
         g, h = store.load(self.root)
         g2 = L.transition(g, node_id, action, surface, **args)
+        _stamp(g2, node_id, who, surface)
         store.save(self.root, g2, h)
         return self.status(node_id)
 

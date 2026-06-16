@@ -107,6 +107,8 @@ nodes:
       exit_code: 0
       ran_at: 2026-06-15T11:59:00Z
       log: .workgraph/runs/build-core-1718456340.log   # gitignored; full captured output
+    updated_at: 2026-06-15T12:00:00Z   # stamped on EVERY transition (provenance)
+    updated_by: parker                 # actor: a human handle, or an agent role/task
 ```
 
 **State machine.**
@@ -305,3 +307,5 @@ Rules: `done` is reachable **only** via `wg_signoff` on the plan/operator surfac
 *Tool best-practices pass (against Anthropic's "Writing effective tools for AI agents"):* added MCP tool **annotations** (`readOnlyHint` on the read group, `openWorldHint` on `wg_verify` (arbitrary shell), `destructiveHint` on `wg_remove_node`) via `tool_annotations()`; enriched the terse one-line tool descriptions into onboard-a-new-hire paragraphs stating each tool's precondition + effect (`tool_descriptions()`); and added a `status` filter to `wg_status` (return the ids in a given state) for the "what's blocked/active now" query. Deliberately NOT done: tool consolidation (the 19-tool count is load-bearing for the per-tool governance allowlist, D-10), pagination/cursors (YAGNI at meta scale), `id`→`node_id` rename (`id` is unambiguous in this single-entity domain; the param description disambiguates), and a formal agent-eval harness (the in-harness HITL run + agent feedback is the right-sized version). 114 tests.
 
 *Visualization (`render` module + `wg_mermaid`):* added a pure mermaid emitter (`render.to_mermaid`) that projects the graph or a slice (`parent` / `status` / `node`+`depth`; default whole graph) to deterministic mermaid text with status baked into node labels. Exposed as the read-only `wg_mermaid` MCP tool (20th tool — read-only, so it doesn't touch governance) and a `workgraph mermaid` CLI subcommand (D-2's minimal CLI: init/serve → init/serve/mermaid). **Boundary held: workgraph emits mermaid text and never shells out; the optional `mermaid-ascii` render is a downstream pipe the caller runs** (`workgraph mermaid … | mermaid-ascii --ascii`) — keeping the core deterministic and dependency-free. Edges are emitted only within the selected slice (no dangling refs). 128 tests.
+
+*Per-node provenance (`updated_at`/`updated_by`):* originally only `done` nodes carried who/at (via the `signoff` vouch); everything else leaned on D-5's "git history is the transition log," which is coarse (git's who = the committer, not the actor; when = commit time) and fragile (needs per-transition commits). Now **every transition stamps `updated_at` (tool clock) and `updated_by`** on the touched node. `who` is a caller-supplied actor — a human handle (`parker`) or an agent role/task (`wg-executor:build-api`) — threaded through every mutating tool/CLI call; it falls back to the calling surface (`plan`/`execute`) when omitted, so it's never empty. `signoff` stays as the distinct `done` governance vouch. Surfaced in `wg_status`/`wg_show`. 137 tests.

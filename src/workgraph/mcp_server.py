@@ -83,22 +83,22 @@ def tool_handlers(service: Service) -> dict[str, Callable[[dict], dict]]:
             depth=a.get("depth", 1),
         ),
         # execute
-        "wg_claim": lambda a: service.claim(a["id"]),
-        "wg_verify": lambda a: service.verify(a["id"]),
-        "wg_request_signoff": lambda a: service.request_signoff(a["id"], a.get("note")),
-        "wg_reverify": lambda a: service.reverify(a["id"]),
-        "wg_report_blocked": lambda a: service.report_blocked(a["id"]),
+        "wg_claim": lambda a: service.claim(a["id"], who=a.get("who")),
+        "wg_verify": lambda a: service.verify(a["id"], who=a.get("who")),
+        "wg_request_signoff": lambda a: service.request_signoff(a["id"], a.get("note"), who=a.get("who")),
+        "wg_reverify": lambda a: service.reverify(a["id"], who=a.get("who")),
+        "wg_report_blocked": lambda a: service.report_blocked(a["id"], who=a.get("who")),
         # plan / operator
-        "wg_ingest": lambda a: service.ingest(a["nodes"]),
-        "wg_add_node": lambda a: service.add_node(a["node"]),
-        "wg_set_gate": lambda a: service.set_gate(a["id"], a["gate"]),
-        "wg_add_dep": lambda a: service.add_dep(a["id"], a["dep"]),
-        "wg_remove_node": lambda a: service.remove_node(a["id"]),
+        "wg_ingest": lambda a: service.ingest(a["nodes"], who=a.get("who")),
+        "wg_add_node": lambda a: service.add_node(a["node"], who=a.get("who")),
+        "wg_set_gate": lambda a: service.set_gate(a["id"], a["gate"], who=a.get("who")),
+        "wg_add_dep": lambda a: service.add_dep(a["id"], a["dep"], who=a.get("who")),
+        "wg_remove_node": lambda a: service.remove_node(a["id"], who=a.get("who")),
         "wg_signoff": lambda a: service.signoff(a["id"], a["who"], a.get("note")),
-        "wg_resolve": lambda a: service.resolve(a["id"], a["rationale"]),
-        "wg_defer": lambda a: service.defer(a["id"]),
-        "wg_unblock": lambda a: service.unblock(a["id"]),
-        "wg_archive": lambda a: service.archive(a["id"]),
+        "wg_resolve": lambda a: service.resolve(a["id"], a["rationale"], who=a.get("who")),
+        "wg_defer": lambda a: service.defer(a["id"], who=a.get("who")),
+        "wg_unblock": lambda a: service.unblock(a["id"], who=a.get("who")),
+        "wg_archive": lambda a: service.archive(a["id"], who=a.get("who")),
     }
 
 
@@ -138,7 +138,7 @@ def tool_schemas() -> dict[str, dict]:
     schema makes Claude Code string-encode array/object args (e.g. `nodes`), which the server then
     iterates character-by-character. Keep this in sync with `tool_handlers` arg access."""
     _id = {"id": dict(_STR, description="node id")}
-    return {
+    schemas = {
         "wg_plan": _obj({}),
         "wg_status": _obj(
             {
@@ -177,6 +177,15 @@ def tool_schemas() -> dict[str, dict]:
         "wg_unblock": _obj(_id, ("id",)),
         "wg_archive": _obj(_id, ("id",)),
     }
+    # Provenance: every mutating tool takes an optional actor recorded as the node's `updated_by`.
+    who = {
+        "type": "string",
+        "description": "actor — your human handle (e.g. 'parker') or agent role/task "
+        "(e.g. 'wg-executor:build-api'); recorded as the node's updated_by",
+    }
+    for name in EXECUTE_TOOLS + PLAN_TOOLS:
+        schemas[name]["properties"].setdefault("who", who)
+    return schemas
 
 
 _DESCRIPTIONS = {

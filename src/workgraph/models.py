@@ -69,8 +69,10 @@ class Node:
     deps: list[str] = field(default_factory=list)
     status: Status = Status.TRIAGE  # entry status
     rationale: str | None = None  # path to tracked .md; never inline (NFR-4)
-    signoff: Signoff | None = None
+    signoff: Signoff | None = None  # the human vouch for `done` (governance evidence)
     last_verify: LastVerify | None = None
+    updated_at: str | None = None  # ISO-8601; stamped on every transition (provenance)
+    updated_by: str | None = None  # actor: a human handle, or an agent's role/task
 
 
 @dataclass
