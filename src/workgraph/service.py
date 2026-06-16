@@ -35,6 +35,37 @@ def _stamp(graph, node_id: str, who: str | None, surface: str) -> None:
         n.updated_by = who or surface
 
 
+def _nudge(node_id: str, status: str) -> str:
+    """A reminder, returned with every state-changing mutation, to reconcile the project's prose
+    (status docs, work logs, comments) with the workgraph. The workgraph is the source of truth and
+    prose must not drift from it — the tool exists so 'deferred' can never be mistaken for 'done', so
+    the terminal transitions carry the sharpest wording."""
+    if status == "done":
+        return (
+            f"'{node_id}' is now done. Record it complete in local docs/work logs — with the gate "
+            "evidence / sign-off — so completion is never left ambiguous. The workgraph is the source of truth."
+        )
+    if status == "resolved":
+        return (
+            f"'{node_id}' is now resolved. Record the decision and its rationale in local docs so it "
+            "reads as settled, not still open. The workgraph is the source of truth."
+        )
+    if status in ("deferred", "archived"):
+        return (
+            f"'{node_id}' is now {status}: set aside, NOT completed. Update local docs/work logs so "
+            "nothing implies it shipped. The workgraph is the source of truth."
+        )
+    if status == "blocked":
+        return (
+            f"'{node_id}' is now blocked. Note the blocker in the work log so the prose explains the "
+            "stall. The workgraph is the source of truth."
+        )
+    return (
+        f"'{node_id}' is now {status} in the workgraph. Reconcile local docs/work logs that describe "
+        "this work so the prose matches the workgraph (the workgraph is the source of truth)."
+    )
+
+
 class Service:
     def __init__(self, store_root: str):
         self.root = store_root
@@ -149,7 +180,12 @@ class Service:
         for nid in ingested:
             _stamp(g, nid, who, surface)
         store.save(self.root, g, h)  # validates refs + cycle atomically (store unchanged on error)
-        return {"ingested": ingested}
+        nudge = (
+            f"Now tracking {len(ingested)} node(s) in the workgraph: {', '.join(ingested)}. "
+            "Reflect them in local planning docs/work logs so the prose matches the workgraph "
+            "(the workgraph is the source of truth)."
+        )
+        return {"ingested": ingested, "nudge": nudge}
 
     def add_node(self, node: dict, who: str | None = None, surface: str = "plan") -> dict:
         g, h = store.load(self.root)
@@ -157,7 +193,9 @@ class Service:
         g2 = L.add_node(g, new, surface)
         _stamp(g2, new.id, who, surface)
         store.save(self.root, g2, h)
-        return self.status(new.id)
+        out = self.status(new.id)
+        out["nudge"] = _nudge(new.id, out["status"])
+        return out
 
     def set_gate(self, node_id: str, gate: dict, who: str | None = None, surface: str = "plan") -> dict:
         g, h = store.load(self.root)
@@ -169,7 +207,9 @@ class Service:
         g2 = L.transition(g, node_id, "set_gate", surface, gate=gobj)
         _stamp(g2, node_id, who, surface)
         store.save(self.root, g2, h)
-        return self.status(node_id)
+        out = self.status(node_id)
+        out["nudge"] = _nudge(node_id, out["status"])
+        return out
 
     def add_dep(self, node_id: str, dep: str, who: str | None = None, surface: str = "plan") -> dict:
         return self._txn(node_id, "add_dep", surface, who=who, dep=dep)
@@ -178,7 +218,11 @@ class Service:
         g, h = store.load(self.root)
         g2 = L.transition(g, node_id, "remove", surface)  # who: node is gone, nothing to stamp
         store.save(self.root, g2, h)
-        return {"removed": node_id}
+        nudge = (
+            f"Removed '{node_id}' from the workgraph. Delete or update any local docs/work logs that "
+            "referenced it so the prose doesn't drift. The workgraph is the source of truth."
+        )
+        return {"removed": node_id, "nudge": nudge}
 
     # ----- execution (execute surface) ---------------------------------------
 
@@ -210,12 +254,15 @@ class Service:
             _stamp(g, node_id, who, surface)
             store.save(self.root, g, h)  # evidence recorded; stays active (AC-7)
             new_status = "active"
-        return {
+        out = {
             "exit_code": result.exit_code,
             "output": result.output,
             "status": new_status,
             "log": log_rel,
         }
+        if result.exit_code == 0:  # state changed; on failure nothing settled, so no nudge
+            out["nudge"] = _nudge(node_id, new_status)
+        return out
 
     def request_signoff(
         self, node_id: str, note: str | None = None, who: str | None = None, surface: str = "execute"
@@ -238,7 +285,9 @@ class Service:
         g2 = L.transition(g, node_id, "signoff", surface, who=who, at=_now(), note=note)
         _stamp(g2, node_id, who, surface)
         store.save(self.root, g2, h)
-        return self.status(node_id)
+        out = self.status(node_id)
+        out["nudge"] = _nudge(node_id, out["status"])
+        return out
 
     def resolve(self, node_id: str, rationale: str, who: str | None = None, surface: str = "plan") -> dict:
         store.write_rationale(self.root, node_id, rationale)  # sets the field
@@ -246,7 +295,9 @@ class Service:
         g2 = L.transition(g, node_id, "resolve", surface)
         _stamp(g2, node_id, who, surface)
         store.save(self.root, g2, h)
-        return self.status(node_id)
+        out = self.status(node_id)
+        out["nudge"] = _nudge(node_id, out["status"])
+        return out
 
     def defer(self, node_id: str, who: str | None = None, surface: str = "plan") -> dict:
         return self._txn(node_id, "defer", surface, who=who)
@@ -264,7 +315,9 @@ class Service:
         g2 = L.transition(g, node_id, action, surface, **args)
         _stamp(g2, node_id, who, surface)
         store.save(self.root, g2, h)
-        return self.status(node_id)
+        out = self.status(node_id)
+        out["nudge"] = _nudge(node_id, out["status"])
+        return out
 
     @staticmethod
     def _require(graph, node_id):

@@ -296,6 +296,22 @@ def tool_annotations() -> dict[str, dict]:
     return ann
 
 
+_SERVER_INSTRUCTIONS = (
+    "workgraph is the source of truth for this project's work — a deterministic graph of work "
+    "units, their dependencies, and each one's completion gate. Keep the project's prose (status "
+    "docs, work logs, READMEs, comments) reconciled with the workgraph, never the reverse.\n\n"
+    "Every state-changing tool returns a `nudge` field. Treat it as an instruction, not "
+    "decoration: after each transition, update the local docs that describe that work so the prose "
+    "matches the workgraph. This is how 'deferred' is kept from being mistaken for 'done'."
+)
+
+
+def server_instructions() -> str:
+    """Server-level instructions surfaced to the MCP client at connect time — they establish the
+    workgraph-is-truth contract and tell the agent the per-mutation `nudge` is actionable."""
+    return _SERVER_INSTRUCTIONS
+
+
 def build_server(store_root: str):
     """Construct the low-level MCP server bound to a store (stdio transport)."""
     from mcp.server import Server
@@ -306,7 +322,7 @@ def build_server(store_root: str):
     schemas = tool_schemas()
     descriptions = tool_descriptions()
     annotations = tool_annotations()
-    server = Server("workgraph")
+    server = Server("workgraph", instructions=server_instructions())
 
     @server.list_tools()
     async def _list_tools():  # pragma: no cover - exercised via stdio at runtime

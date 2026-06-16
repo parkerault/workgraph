@@ -106,6 +106,17 @@ mutating tool/CLI call to record the actor — suggested convention:
 If omitted, `who` falls back to the calling surface (`plan` / `execute`), so it's never empty.
 `signoff` remains the distinct human vouch that opens `done`.
 
+## Reconciliation nudge
+
+The workgraph is the source of truth — so when an agent changes it, the surrounding prose (status docs,
+work logs, comments) can go stale. Every state-changing tool therefore returns a **`nudge`**: a short,
+status-aware reminder to reconcile the local docs with the workgraph. Terminal transitions are sharpest —
+`done`/`resolved` say "record it complete," `deferred`/`archived` say "set aside, **not** completed —
+nothing should imply it shipped," `blocked` says "note the blocker." A *failed* `wg_verify` settles
+nothing and returns no nudge; reads never nudge. The MCP server also advertises this contract in its
+connect-time `instructions`, so the agent treats the nudge as actionable, not decorative. The nudge is
+advisory and lives only in the response — it is never written into `graph.yaml`.
+
 ## The surface split (governance)
 
 `workgraph` exposes three tool groups — **read**, **execute**, **plan/operator**. The gate-authorship

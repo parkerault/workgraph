@@ -29,7 +29,13 @@ async def _round_trip(root: str) -> dict:
     )
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
-            await session.initialize()
+            init = await session.initialize()
+            # Server-level instructions reach the client at connect time and carry the
+            # workgraph-is-truth / reconcile-the-nudge contract.
+            from workgraph.mcp_server import server_instructions
+
+            assert init.instructions == server_instructions()
+            assert "nudge" in init.instructions.lower()
 
             listed = await session.list_tools()
             names = {t.name for t in listed.tools}
@@ -61,7 +67,8 @@ async def _round_trip(root: str) -> dict:
             )
             assert _payload(await session.call_tool("wg_plan", {}))["waves"] == [["a"], ["b"]]
 
-            await session.call_tool("wg_claim", {"id": "a"})
+            claimed = _payload(await session.call_tool("wg_claim", {"id": "a"}))
+            assert "nudge" in claimed  # the reconciliation nudge rides every mutation over the wire
             verified = _payload(await session.call_tool("wg_verify", {"id": "a"}))
             assert verified["exit_code"] == 0 and verified["status"] == "awaiting-signoff"
 

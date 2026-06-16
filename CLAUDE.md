@@ -13,7 +13,7 @@ query "where are we" cheaply. It exists to make **"deferred" structurally imposs
 **`SPEC.md` is the ground-truth contract** (stable IDs: `AC-n` criteria, `C-n` contracts, `D-n`
 decisions with rationale, `WU-n` work units). `HANDOFF.md` is the original ratified design. `README.md`
 has the surface-split deployment snippets. When you change behaviour, update `SPEC.md` too — the
-tool's own *board-is-truth / no-drift* principle applies to itself.
+tool's own *workgraph-is-truth / no-drift* principle applies to itself.
 
 ## Commands
 
@@ -47,10 +47,12 @@ implements a numbered contract from `SPEC.md`. A mutation flows: **MCP tool → 
   Backs `wg_mermaid` / `workgraph mermaid`. workgraph emits the text; the caller renders it (e.g.
   pipes to `mermaid-ascii`) — the core never shells out for presentation.
 - **`service.py`** — where operation logic lives: composes `load → transition/graph-op/gate →
-  write_rationale → save`, holds `base_hash` across the pure transition, and stamps timestamps
-  (lifecycle has no clock).
+  write_rationale → save`, holds `base_hash` across the pure transition, stamps timestamps
+  (lifecycle has no clock), and attaches a status-aware `nudge` to every mutation response
+  (`_nudge`, D-14 — reconcile prose with the workgraph; reads/failed-verify carry none).
 - **`mcp_server.py` (C-5)** — thin low-level `mcp` stdio binding. `tool_handlers(service)` maps each
-  `wg_*` tool to a service call; `error_envelope` maps typed errors. Tools are partitioned into
+  `wg_*` tool to a service call; `error_envelope` maps typed errors; `server_instructions()` is
+  advertised at connect time (workgraph-is-truth + the nudge is actionable). Tools are partitioned into
   `READ_TOOLS` / `EXECUTE_TOOLS` / `PLAN_TOOLS`.
 - **`cli.py`** — `init` / `serve` only (no CRUD CLI; the agent surface is MCP).
 

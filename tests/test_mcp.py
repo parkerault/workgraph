@@ -138,3 +138,16 @@ def test_error_envelope_maps_each_error_type():
 def test_build_server_constructs(tmp_path):
     store.init_store(str(tmp_path))
     assert M.build_server(str(tmp_path)) is not None
+
+
+def test_server_instructions_reinforce_the_reconciliation_nudge():
+    text = M.server_instructions()
+    low = text.lower()
+    assert "nudge" in low
+    assert "workgraph" in low and "reconcile" in low
+
+
+def test_build_server_wires_the_instructions(tmp_path):
+    store.init_store(str(tmp_path))
+    server = M.build_server(str(tmp_path))
+    assert server.instructions == M.server_instructions()
