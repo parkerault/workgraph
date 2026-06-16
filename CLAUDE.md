@@ -43,6 +43,9 @@ implements a numbered contract from `SPEC.md`. A mutation flows: **MCP tool → 
   surface capability, gate/dep immutability, and runs `recompute_readiness` after every mutation.
 - **`gate.py` (C-4)** — subprocess gate runner; own process group (timeout kills the whole group);
   output truncated to trailing 4 KB for evidence, full log written to `.workgraph/runs/`.
+- **`render.py`** — pure projection of a graph/slice → mermaid text (status baked into labels).
+  Backs `wg_mermaid` / `workgraph mermaid`. workgraph emits the text; the caller renders it (e.g.
+  pipes to `mermaid-ascii`) — the core never shells out for presentation.
 - **`service.py`** — where operation logic lives: composes `load → transition/graph-op/gate →
   write_rationale → save`, holds `base_hash` across the pure transition, and stamps timestamps
   (lifecycle has no clock).

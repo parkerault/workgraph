@@ -22,7 +22,7 @@ from .service import Service
 
 # The surface partition (C-5). The execute group is a strict subset of read+execute, so an executor
 # can never create a node, set a gate, add a dep, or sign off (AC-11/AC-12).
-READ_TOOLS: tuple[str, ...] = ("wg_plan", "wg_status", "wg_show", "wg_ready")
+READ_TOOLS: tuple[str, ...] = ("wg_plan", "wg_status", "wg_show", "wg_ready", "wg_mermaid")
 EXECUTE_TOOLS: tuple[str, ...] = (
     "wg_claim",
     "wg_verify",
@@ -75,6 +75,13 @@ def tool_handlers(service: Service) -> dict[str, Callable[[dict], dict]]:
         "wg_status": lambda a: service.status(node_id=a.get("id"), status=a.get("status")),
         "wg_show": lambda a: service.show(a["id"]),
         "wg_ready": lambda a: {"ready": service.ready()},
+        "wg_mermaid": lambda a: service.mermaid(
+            direction=a.get("direction", "TD"),
+            parent=a.get("parent"),
+            status=a.get("status"),
+            node=a.get("node"),
+            depth=a.get("depth", 1),
+        ),
         # execute
         "wg_claim": lambda a: service.claim(a["id"]),
         "wg_verify": lambda a: service.verify(a["id"]),
@@ -145,6 +152,15 @@ def tool_schemas() -> dict[str, dict]:
         ),
         "wg_show": _obj(_id, ("id",)),
         "wg_ready": _obj({}),
+        "wg_mermaid": _obj(
+            {
+                "direction": {"type": "string", "enum": ["TD", "LR"], "description": "layout direction (default TD)"},
+                "parent": {"type": "string", "description": "slice: a parent id -> it and its children"},
+                "status": {"type": "string", "enum": [s.value for s in Status], "description": "slice: only nodes in this state"},
+                "node": {"type": "string", "description": "slice: center node for a dependency-neighborhood view"},
+                "depth": {"type": "integer", "description": "neighborhood radius for `node` (default 1)"},
+            }
+        ),
         "wg_claim": _obj(_id, ("id",)),
         "wg_verify": _obj(_id, ("id",)),
         "wg_request_signoff": _obj({"id": _STR, "note": _STR}, ("id",)),
@@ -181,6 +197,13 @@ _DESCRIPTIONS = {
     "wg_ready": (
         "Return the ids of nodes currently in `ready` — their dependencies are all terminal-good and "
         "they can be claimed. Read-only."
+    ),
+    "wg_mermaid": (
+        "Render the graph (or a slice) as mermaid `graph` text, with each node's status baked into "
+        "its label. Slice with `parent` (it + its children), `status` (nodes in that state), or "
+        "`node`+`depth` (dependency neighborhood); default is the whole graph. Read-only — the caller "
+        "renders the text itself (e.g. pipe it to the `mermaid-ascii` binary for a terminal view, or "
+        "embed it in a doc)."
     ),
     "wg_claim": "Claim a `ready` node to start work on it (ready -> active). Execute surface.",
     "wg_verify": (

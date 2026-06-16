@@ -27,6 +27,27 @@ uv run workgraph init        # scaffold a .workgraph/ store
 uv run workgraph serve       # launch the MCP server over stdio
 ```
 
+## Visualize
+
+`workgraph` emits **mermaid** text for the graph (or a slice), with each node's status baked into
+its label. It never renders the diagram itself — the caller pipes the text to a renderer of its
+choice. Over MCP this is the read-only `wg_mermaid` tool; from the shell:
+
+```sh
+# whole graph
+uv run workgraph mermaid | mermaid-ascii --ascii
+
+# slices: a milestone's children · the active frontier · one node's neighborhood
+uv run workgraph mermaid --parent m-foundation | mermaid-ascii --ascii
+uv run workgraph mermaid --status active       | mermaid-ascii --ascii
+uv run workgraph mermaid --node build-core --depth 1
+```
+
+The raw mermaid renders richly on GitHub and mermaid.live too; [`mermaid-ascii`](https://github.com/AlexanderGrooff/mermaid-ascii)
+is just the terminal renderer. Prefer slices for large graphs (the ASCII renderer doesn't wrap to
+terminal width), and embed the mermaid (not the ASCII) in committed docs — it diffs cleanly and
+renders in-place.
+
 ## The surface split (governance)
 
 `workgraph` exposes three tool groups — **read**, **execute**, **plan/operator**. The gate-authorship

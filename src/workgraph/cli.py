@@ -21,6 +21,14 @@ def main(argv: list[str] | None = None) -> int:
     p_serve = sub.add_parser("serve", help="launch the MCP server over stdio")
     p_serve.add_argument("path", nargs="?", default=".", help="store root (default: cwd)")
 
+    p_mermaid = sub.add_parser("mermaid", help="print the graph (or a slice) as mermaid text")
+    p_mermaid.add_argument("path", nargs="?", default=".", help="store root (default: cwd)")
+    p_mermaid.add_argument("--direction", default="TD", help="TD or LR (default TD)")
+    p_mermaid.add_argument("--parent", help="slice: a parent id and its children")
+    p_mermaid.add_argument("--status", help="slice: only nodes in this state")
+    p_mermaid.add_argument("--node", help="slice: center node for a neighborhood view")
+    p_mermaid.add_argument("--depth", type=int, default=1, help="neighborhood radius for --node")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "init":
@@ -34,6 +42,19 @@ def main(argv: list[str] | None = None) -> int:
         from . import mcp_server
 
         asyncio.run(mcp_server.serve(args.path))
+        return 0
+
+    if args.cmd == "mermaid":
+        from .service import Service
+
+        out = Service(args.path).mermaid(
+            direction=args.direction,
+            parent=args.parent,
+            status=args.status,
+            node=args.node,
+            depth=args.depth,
+        )
+        print(out["mermaid"], end="")
         return 0
 
     parser.print_help()

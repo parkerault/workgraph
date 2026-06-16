@@ -18,5 +18,17 @@ def test_init_is_idempotent(tmp_path):
     assert main(["init", str(tmp_path)]) == 0
 
 
+def test_mermaid_subcommand_prints_mermaid(tmp_path, capsys):
+    from workgraph.service import Service
+
+    main(["init", str(tmp_path)])
+    Service(str(tmp_path)).ingest([{"id": "a", "gate": {"kind": "none"}}])
+    capsys.readouterr()  # drop the init message
+    rc = main(["mermaid", str(tmp_path)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert out.startswith("graph TD") and 'a["' in out
+
+
 def test_no_command_returns_nonzero(capsys):
     assert main([]) == 1

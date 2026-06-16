@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 from . import graph as G
 from . import lifecycle as L
+from . import render
 from . import store
 from .errors import IllegalTransition, ValidationError
 from .gate import run_gate
@@ -68,6 +69,20 @@ class Service:
         if children:
             out["children"] = children
         return out
+
+    def mermaid(
+        self,
+        direction: str = "TD",
+        parent: str | None = None,
+        status: str | None = None,
+        node: str | None = None,
+        depth: int = 1,
+    ) -> dict:
+        g, _ = store.load(self.root)
+        text = render.to_mermaid(
+            g, direction=direction, parent=parent, status=status, node=node, depth=depth
+        )
+        return {"mermaid": text}
 
     def show(self, node_id: str) -> dict:
         g, _ = store.load(self.root)

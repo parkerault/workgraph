@@ -98,6 +98,18 @@ def test_execute_group_excludes_authorship_and_signoff():
     assert "wg_signoff" not in EXECUTE_TOOLS  # the only door to `done` is plan-only
 
 
+def test_wg_mermaid_is_a_read_tool():
+    assert "wg_mermaid" in READ_TOOLS
+
+
+def test_mermaid_handler_returns_mermaid(tmp_path):
+    store.init_store(str(tmp_path))
+    s = Service(str(tmp_path))
+    s.ingest([{"id": "a", "gate": {"kind": "none"}}])
+    out = tool_handlers(s)["wg_mermaid"]({})
+    assert out["mermaid"].startswith("graph TD") and 'a["' in out["mermaid"]
+
+
 def test_handlers_cover_exactly_the_manifest(tmp_path):
     store.init_store(str(tmp_path))
     handlers = tool_handlers(Service(str(tmp_path)))

@@ -90,6 +90,21 @@ def test_status_parent_reports_child_rollup(tmp_path):
     assert st["children"]  # rollup present for a parent
 
 
+def test_mermaid_returns_text(tmp_path):
+    s = svc(tmp_path)
+    s.ingest([_node("a", gate_kind="none"), _node("b", gate_kind="none", deps=["a"])])
+    m = s.mermaid()["mermaid"]
+    assert m.startswith("graph TD")
+    assert 'a["a [ready]"]' in m and "a --> b" in m
+
+
+def test_mermaid_status_slice(tmp_path):
+    s = svc(tmp_path)
+    s.ingest([_node("a", gate_kind="none"), _node("b", gate_kind="none", deps=["a"])])
+    m = s.mermaid(status="ready")["mermaid"]  # a is ready, b is triage
+    assert 'a["' in m and 'b["' not in m
+
+
 def test_status_filter_returns_ids_in_that_state(tmp_path):
     s = svc(tmp_path)
     s.ingest([_node("a"), _node("b", deps=["a"])])  # a -> ready, b -> triage
