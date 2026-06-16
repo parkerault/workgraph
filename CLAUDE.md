@@ -67,7 +67,8 @@ Tests mirror this (`tests/test_<module>.py`); `test_e2e.py` drives the real tool
    D-10), and (b) in-tool clamps as defense-in-depth: **gates/edges immutable once a node leaves
    `triage`**, and the **only transition into `done` is plan-only `wg_signoff`**. If you add a tool,
    place it in the correct group and keep `EXECUTE_TOOLS` a strict subset excluding any
-   create/set-gate/add-dep/sign-off tool (`test_mcp` asserts this).
+   create/set-gate/add-dep/remove-dep/sign-off tool (`test_mcp` asserts this), and add any new
+   plan tool to the README/SPEC executor `permissions.deny` lists.
 2. **The status vocabulary is structural.** `triage → ready → active → awaiting-signoff → done`;
    terminals `done / resolved / deferred / archived`; **terminal-good = `{done, resolved}`**.
    `deferred` is unreachable from `done` (and vice-versa) — that gap is the bug this tool prevents.

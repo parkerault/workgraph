@@ -125,6 +125,23 @@ nothing and returns no nudge; reads never nudge. The MCP server also advertises 
 connect-time `instructions`, so the agent treats the nudge as actionable, not decorative. The nudge is
 advisory and lives only in the response — it is never written into `graph.yaml`.
 
+## Revising the graph
+
+Plans change. Two plan-surface moves cover the common cases (an abandoned `deferred`/`archived`
+prerequisite **blocks** its dependents by design — that's the safety default, and `wg_remove_dep`
+is the explicit release):
+
+- **A planned task is no longer needed** — `wg_remove_dep <dependent> <task>` for each dependent
+  (a `blocked` dependent returns to `ready` as its dead edge is dropped), then `wg_defer`/`wg_archive`
+  the task to keep it as an abandoned record.
+- **A node was added by mistake** — clear its inbound edges with `wg_remove_dep <dependent> <node>`,
+  then `wg_remove_node <node>`. (Removal is allowed only while a node is not-yet-started — `triage`
+  or `ready` — with no remaining dependents; started/finished work is retired with `defer`/`archive`.)
+
+`wg_remove_dep` is the inverse of `wg_add_dep`, but the rules are asymmetric on purpose: you can
+*remove* a wrong prerequisite from a not-yet-started or blocked node, but you can never *add* one to
+work that's already cleared to run (that would retroactively gate it).
+
 ## The surface split (governance)
 
 `workgraph` exposes three tool groups — **read**, **execute**, **plan/operator**. The gate-authorship
@@ -151,7 +168,8 @@ cannot be overridden:
     "deny": [
       "mcp__workgraph__wg_ingest", "mcp__workgraph__wg_add_node",
       "mcp__workgraph__wg_set_gate", "mcp__workgraph__wg_add_dep",
-      "mcp__workgraph__wg_remove_node", "mcp__workgraph__wg_signoff",
+      "mcp__workgraph__wg_remove_dep", "mcp__workgraph__wg_remove_node",
+      "mcp__workgraph__wg_signoff",
       "mcp__workgraph__wg_resolve", "mcp__workgraph__wg_defer",
       "mcp__workgraph__wg_unblock", "mcp__workgraph__wg_archive"
     ]

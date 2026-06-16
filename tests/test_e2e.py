@@ -114,10 +114,18 @@ def test_remove_with_dependents_rejected(tmp_path):
         h["wg_remove_node"]({"id": "a"})
 
 
-def test_remove_non_triage_node_rejected(tmp_path):
+def test_remove_ready_node_allowed(tmp_path):
     s, h = setup(tmp_path)
-    h["wg_ingest"]({"nodes": [cmd("a")]})  # auto-ready, left triage
-    with pytest.raises((ValidationError, IllegalTransition)):  # AC-24 (not in triage)
+    h["wg_ingest"]({"nodes": [cmd("a")]})  # no deps -> auto-ready; not yet started
+    assert s.status("a")["status"] == "ready"
+    assert h["wg_remove_node"]({"id": "a"})["removed"] == "a"  # AC-24: not-yet-started is removable
+
+
+def test_remove_started_node_rejected(tmp_path):
+    s, h = setup(tmp_path)
+    h["wg_ingest"]({"nodes": [cmd("a")]})
+    h["wg_claim"]({"id": "a"})  # active = started work
+    with pytest.raises((ValidationError, IllegalTransition)):  # AC-24: retire started work, don't delete
         h["wg_remove_node"]({"id": "a"})
 
 

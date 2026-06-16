@@ -1,8 +1,8 @@
 """C-3 — Lifecycle interface. The state machine: transitions, surface capability, immutability.
 
 Pure over the Graph (no store I/O, no base_hash): `transition` deep-copies, mutates, returns a new
-Graph, and re-runs the readiness recompute (AC-23). Structural edits (set_gate/add_dep/remove) and
-creation (add_node) are surface-checked here too.
+Graph, and re-runs the readiness recompute (AC-23). Structural edits (set_gate/add_dep/remove_dep/
+remove) and creation (add_node) are surface-checked here too.
 """
 
 from __future__ import annotations
@@ -56,10 +56,17 @@ TABLE: dict[str, TransitionSpec] = {
     "unblock": TransitionSpec(frozenset({S.BLOCKED}), S.TRIAGE, frozenset({PLAN})),
     "defer": TransitionSpec(NON_TERMINAL, S.DEFERRED, frozenset({PLAN})),
     "archive": TransitionSpec(TERMINAL, S.ARCHIVED, frozenset({PLAN})),
-    # structural, triage-only:
+    # structural edits (plan surface):
     "set_gate": TransitionSpec(frozenset({S.TRIAGE}), S.TRIAGE, frozenset({PLAN})),
     "add_dep": TransitionSpec(frozenset({S.TRIAGE}), S.TRIAGE, frozenset({PLAN})),
-    "remove": TransitionSpec(frozenset({S.TRIAGE}), S.TRIAGE, frozenset({PLAN})),
+    # remove_dep is the inverse of add_dep. The asymmetry is deliberate: you cannot *add* a
+    # prerequisite after triage (would retroactively gate cleared work), but you can *remove* a
+    # wrong or abandoned one from a not-yet-started or blocked dependent — a plan-surface
+    # correction; recompute_readiness then re-routes the dependent (e.g. blocked -> ready). AC-31.
+    "remove_dep": TransitionSpec(frozenset({S.TRIAGE, S.READY, S.BLOCKED}), S.TRIAGE, frozenset({PLAN})),
+    # remove a node: only while not-yet-started (triage/ready) and with no dependents; started or
+    # terminal work is retired with defer/archive, not deleted (AC-24).
+    "remove": TransitionSpec(frozenset({S.TRIAGE, S.READY}), S.TRIAGE, frozenset({PLAN})),
 }
 
 
@@ -159,12 +166,22 @@ def transition(graph: Graph, node_id: str, action: str, surface: str, **args) ->
             raise ValidationError(node_id, "deps", f"unknown dependency {dep!r}")
         if dep not in node.deps:
             node.deps.append(dep)
+    elif action == "remove_dep":
+        dep = args.get("dep")
+        if dep not in node.deps:
+            raise ValidationError(node_id, "deps", f"{dep!r} is not a dependency of {node_id!r}")
+        node.deps.remove(dep)
+        return recompute_readiness(g)  # blocked dependent -> ready once the dead edge is gone
     elif action == "remove":
         dependents = [
             n.id for n in g.nodes.values() if node_id in n.deps or n.parent == node_id
         ]
         if dependents:
-            raise ValidationError(node_id, "deps", f"has dependents {dependents}")
+            raise ValidationError(
+                node_id,
+                "deps",
+                f"has dependents {dependents}; remove those dependency edges first, then retry",
+            )
         del g.nodes[node_id]
         return recompute_readiness(g)
 

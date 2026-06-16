@@ -35,6 +35,7 @@ PLAN_TOOLS: tuple[str, ...] = (
     "wg_add_node",
     "wg_set_gate",
     "wg_add_dep",
+    "wg_remove_dep",
     "wg_remove_node",
     "wg_signoff",
     "wg_resolve",
@@ -93,6 +94,7 @@ def tool_handlers(service: Service) -> dict[str, Callable[[dict], dict]]:
         "wg_add_node": lambda a: service.add_node(a["node"], who=a.get("who")),
         "wg_set_gate": lambda a: service.set_gate(a["id"], a["gate"], who=a.get("who")),
         "wg_add_dep": lambda a: service.add_dep(a["id"], a["dep"], who=a.get("who")),
+        "wg_remove_dep": lambda a: service.remove_dep(a["id"], a["dep"], who=a.get("who")),
         "wg_remove_node": lambda a: service.remove_node(a["id"], who=a.get("who")),
         "wg_signoff": lambda a: service.signoff(a["id"], a["who"], a.get("note")),
         "wg_resolve": lambda a: service.resolve(a["id"], a["rationale"], who=a.get("who")),
@@ -170,6 +172,10 @@ def tool_schemas() -> dict[str, dict]:
         "wg_add_node": _obj({"node": _NODE_SCHEMA}, ("node",)),
         "wg_set_gate": _obj({"id": _STR, "gate": _GATE_SCHEMA}, ("id", "gate")),
         "wg_add_dep": _obj({"id": _STR, "dep": dict(_STR, description="dependency id")}, ("id", "dep")),
+        "wg_remove_dep": _obj(
+            {"id": _STR, "dep": dict(_STR, description="the dependency id to remove from this node's deps")},
+            ("id", "dep"),
+        ),
         "wg_remove_node": _obj(_id, ("id",)),
         "wg_signoff": _obj({"id": _STR, "who": _STR, "note": _STR}, ("id", "who")),
         "wg_resolve": _obj({"id": _STR, "rationale": _STR}, ("id", "rationale")),
@@ -250,9 +256,17 @@ _DESCRIPTIONS = {
     "wg_add_dep": (
         "Add a dependency edge to a node. Allowed only while the node is in `triage`. Plan/operator surface."
     ),
+    "wg_remove_dep": (
+        "Remove a dependency edge from a node (the inverse of wg_add_dep). Use it to release a "
+        "dependent of an abandoned prerequisite — a `blocked` dependent returns to `ready` once its "
+        "dead edge is gone — or to clear edges before deleting a wrongly-added node. Allowed while the "
+        "dependent is `triage`, `ready`, or `blocked` (not once it is active/awaiting-signoff). "
+        "Plan/operator surface."
+    ),
     "wg_remove_node": (
-        "Delete a node. Allowed only if it is in `triage` and no other node depends on it; never "
-        "leaves a dangling reference. To retire started work use wg_defer/wg_archive. Plan/operator surface."
+        "Delete a node. Allowed only if it is not yet started (`triage` or `ready`) and no other node "
+        "depends on it (clear edges first with wg_remove_dep); never leaves a dangling reference. To "
+        "retire started or finished work use wg_defer/wg_archive. Plan/operator surface."
     ),
     "wg_signoff": (
         "Record the human operator's sign-off, moving an `awaiting-signoff` node to `done`. This is "
@@ -292,6 +306,7 @@ def tool_annotations() -> dict[str, dict]:
     for t in EXECUTE_TOOLS + PLAN_TOOLS:
         ann[t] = {"readOnlyHint": False}
     ann["wg_verify"] = {"readOnlyHint": False, "openWorldHint": True}
+    ann["wg_remove_dep"] = {"readOnlyHint": False, "destructiveHint": True}
     ann["wg_remove_node"] = {"readOnlyHint": False, "destructiveHint": True}
     return ann
 

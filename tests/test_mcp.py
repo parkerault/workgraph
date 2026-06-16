@@ -87,6 +87,7 @@ def test_execute_group_excludes_authorship_and_signoff():
         "wg_add_node",
         "wg_set_gate",
         "wg_add_dep",
+        "wg_remove_dep",
         "wg_remove_node",
         "wg_signoff",
         "wg_resolve",

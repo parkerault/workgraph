@@ -214,6 +214,9 @@ class Service:
     def add_dep(self, node_id: str, dep: str, who: str | None = None, surface: str = "plan") -> dict:
         return self._txn(node_id, "add_dep", surface, who=who, dep=dep)
 
+    def remove_dep(self, node_id: str, dep: str, who: str | None = None, surface: str = "plan") -> dict:
+        return self._txn(node_id, "remove_dep", surface, who=who, dep=dep)
+
     def remove_node(self, node_id: str, who: str | None = None, surface: str = "plan") -> dict:
         g, h = store.load(self.root)
         g2 = L.transition(g, node_id, "remove", surface)  # who: node is gone, nothing to stamp

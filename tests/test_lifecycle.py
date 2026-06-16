@@ -226,6 +226,43 @@ def test_remove_rejected_with_dependents():
         L.transition(g, "a", "remove", PLAN)
 
 
+def test_remove_allowed_from_ready():
+    # a no-dep node auto-advances triage->ready, so removal must work from ready too (else a
+    # mistakenly-added node is unremovable). Started/terminal work still uses defer/archive.
+    g = gw(nd("a", "command", status=S.READY))
+    assert "a" not in L.transition(g, "a", "remove", PLAN).nodes
+
+
+# ---- remove_dep: the plan-surface inverse of add_dep (AC-31) ----------------
+
+def test_remove_dep_unblocks_dependent():
+    # b depends on a; a deferred -> b blocked. Removing the edge releases b (recompute -> ready).
+    g = gw(nd("a", "command", status=S.DEFERRED), nd("b", "command", status=S.BLOCKED, deps=["a"]))
+    g2 = L.transition(g, "b", "remove_dep", PLAN, dep="a")
+    assert "a" not in g2.nodes["b"].deps
+    assert g2.nodes["b"].status == S.READY
+    assert g.nodes["b"].deps == ["a"]  # original untouched (purity)
+
+
+def test_remove_dep_unknown_edge_rejected():
+    g = gw(nd("a", status=S.TRIAGE), nd("b", status=S.TRIAGE))
+    with pytest.raises(ValidationError):
+        L.transition(g, "b", "remove_dep", PLAN, dep="a")  # b does not depend on a
+
+
+def test_remove_dep_denied_on_execute_surface():
+    g = gw(nd("a", status=S.DEFERRED), nd("b", status=S.BLOCKED, deps=["a"]))
+    with pytest.raises(SurfaceDenied):
+        L.transition(g, "b", "remove_dep", EXEC, dep="a")
+
+
+def test_remove_dep_rejected_on_inflight_dependent():
+    # an active dependent's edges stay immutable — not in remove_dep's from_states.
+    g = gw(nd("a", status=S.DONE), nd("b", status=S.ACTIVE, deps=["a"]))
+    with pytest.raises(IllegalTransition):
+        L.transition(g, "b", "remove_dep", PLAN, dep="a")
+
+
 # ---- parent gating (AC-20) --------------------------------------------------
 
 def test_parent_with_gate_cannot_signoff_while_child_pending():
