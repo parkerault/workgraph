@@ -83,7 +83,8 @@ class Service:
     def status(self, node_id: str | None = None, status: str | None = None) -> dict:
         g, _ = store.load(self.root)
         if status is not None:
-            return {"status": status, "ids": [nid for nid, n in g.nodes.items() if n.status.value == status]}
+            wanted = {p.strip() for p in status.split(",") if p.strip()}  # one or more states
+            return {"status": status, "ids": [nid for nid, n in g.nodes.items() if n.status.value in wanted]}
         if node_id is None:
             parents = sorted({n.parent for n in g.nodes.values() if n.parent})
             return {

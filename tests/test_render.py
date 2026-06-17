@@ -48,6 +48,13 @@ def test_status_slice():
     assert 'a["' in m and 'c["' in m and 'b["' not in m
 
 
+def test_status_slice_accepts_comma_separated_states():
+    G = g(nd("a", Status.ACTIVE), nd("b", Status.BLOCKED), nd("c", Status.READY), nd("d", Status.DONE))
+    m = render.to_mermaid(G, status="active, blocked , ready")  # whitespace tolerated
+    assert all(f'{x}["' in m for x in ("a", "b", "c"))
+    assert 'd["' not in m  # done excluded
+
+
 def test_node_neighborhood_depth_1():
     G = g(nd("a"), nd("b", deps=["a"]), nd("c", deps=["b"]), nd("d", deps=["c"]))
     m = render.to_mermaid(G, node="b", depth=1)  # {a,b,c}, not d

@@ -147,8 +147,9 @@ def tool_schemas() -> dict[str, dict]:
                 "id": {"type": "string", "description": "a node id — its summary (omit for the project rollup)"},
                 "status": {
                     "type": "string",
-                    "enum": [s.value for s in Status],
-                    "description": "return the ids of all nodes in this state",
+                    "description": "return the ids of all nodes in this state; pass several "
+                    "comma-separated (e.g. 'active,ready,blocked') to union them. One of: "
+                    + ", ".join(s.value for s in Status),
                 },
             }
         ),
@@ -158,7 +159,7 @@ def tool_schemas() -> dict[str, dict]:
             {
                 "direction": {"type": "string", "enum": ["TD", "LR"], "description": "layout direction (default TD)"},
                 "parent": {"type": "string", "description": "slice: a parent id -> it and its children"},
-                "status": {"type": "string", "enum": [s.value for s in Status], "description": "slice: only nodes in this state"},
+                "status": {"type": "string", "description": "slice: only nodes in this state — or several comma-separated (e.g. 'active,ready,blocked'). One of: " + ", ".join(s.value for s in Status)},
                 "node": {"type": "string", "description": "slice: center node for a dependency-neighborhood view"},
                 "depth": {"type": "integer", "description": "neighborhood radius for `node` (default 1)"},
             }
@@ -203,7 +204,8 @@ _DESCRIPTIONS = {
     "wg_status": (
         "Answer 'where are we'. No argument -> a project rollup (counts of nodes by status, grouped "
         "by parent). `id` -> that node's summary (status, gate kind, last verify, sign-off, child "
-        "rollup). `status` -> the ids of all nodes in that state. Read-only; never returns node bodies."
+        "rollup). `status` -> the ids of all nodes in that state, or several comma-separated "
+        "('active,ready,blocked') to union them. Read-only; never returns node bodies."
     ),
     "wg_show": (
         "Return full detail for one node: deps, gate (incl. command), rationale path, sign-off, and "
@@ -215,8 +217,9 @@ _DESCRIPTIONS = {
     ),
     "wg_mermaid": (
         "Render the graph (or a slice) as mermaid `graph` text, with each node's status baked into "
-        "its label. Slice with `parent` (it + its children), `status` (nodes in that state), or "
-        "`node`+`depth` (dependency neighborhood); default is the whole graph. Read-only — the caller "
+        "its label. Slice with `parent` (it + its children), `status` (nodes in that state, or "
+        "several comma-separated), or `node`+`depth` (dependency neighborhood); default is the whole "
+        "graph. Read-only — the caller "
         "renders the text itself (e.g. pipe it to the `mermaid-ascii` binary for a terminal view, or "
         "embed it in a doc)."
     ),

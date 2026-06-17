@@ -87,9 +87,9 @@ workgraph mermaid | mermaid-ascii --ascii
 # current directory, so workgraph still reads *this* project's ./.workgraph/:
 uv run --project ~/projects/workgraph workgraph mermaid | mermaid-ascii --ascii
 
-# slices: a milestone's children · the active frontier · one node's neighborhood
-workgraph mermaid --parent m-foundation | mermaid-ascii --ascii
-workgraph mermaid --status active        | mermaid-ascii --ascii
+# slices: a milestone's children · the in-flight frontier · one node's neighborhood
+workgraph mermaid --parent m-foundation         | mermaid-ascii --ascii
+workgraph mermaid --status active,ready,blocked | mermaid-ascii --ascii  # one or several states
 workgraph mermaid --node build-core --depth 1
 ```
 

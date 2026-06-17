@@ -114,6 +114,17 @@ def test_status_filter_returns_ids_in_that_state(tmp_path):
     assert s.status(status="done")["ids"] == []  # empty, not an error
 
 
+def test_status_filter_accepts_comma_separated_states(tmp_path):
+    s = svc(tmp_path)
+    s.ingest([_node("rdy"), _node("act"), _node("dep"), _node("blk", deps=["dep"])])
+    s.claim("act")  # active
+    s.defer("dep")  # -> blk becomes blocked
+    out = s.status(status="active,ready,blocked")
+    assert set(out["ids"]) == {"rdy", "act", "blk"}  # union; deferred `dep` excluded
+    assert s.status(status="active")["ids"] == ["act"]  # single value unchanged
+    assert set(s.status(status="active, ready")["ids"]) == {"rdy", "act"}  # whitespace tolerated
+
+
 # ---- command gate happy path (AC-6, AC-7, AC-8) ----------------------------
 
 def test_verify_pass_then_signoff_reaches_done(tmp_path):

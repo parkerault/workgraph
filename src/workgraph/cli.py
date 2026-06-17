@@ -25,7 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     p_mermaid.add_argument("path", nargs="?", default=".", help="store root (default: cwd)")
     p_mermaid.add_argument("--direction", default="TD", help="TD or LR (default TD)")
     p_mermaid.add_argument("--parent", help="slice: a parent id and its children")
-    p_mermaid.add_argument("--status", help="slice: only nodes in this state")
+    p_mermaid.add_argument("--status", help="slice: nodes in this state, or several comma-separated (e.g. active,ready,blocked)")
     p_mermaid.add_argument("--node", help="slice: center node for a neighborhood view")
     p_mermaid.add_argument("--depth", type=int, default=1, help="neighborhood radius for --node")
 

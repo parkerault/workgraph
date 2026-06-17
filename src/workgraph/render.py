@@ -36,7 +36,8 @@ def _select(graph: Graph, parent, status, node, depth) -> set[str]:
     if parent is not None:
         return {nid for nid, n in graph.nodes.items() if nid == parent or n.parent == parent}
     if status is not None:
-        return {nid for nid, n in graph.nodes.items() if n.status.value == status}
+        wanted = {p.strip() for p in status.split(",") if p.strip()}  # one or more states
+        return {nid for nid, n in graph.nodes.items() if n.status.value in wanted}
     if node is not None:
         return _neighborhood(graph, node, depth)
     return set(graph.nodes)
