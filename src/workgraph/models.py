@@ -25,8 +25,15 @@ class Status(str, Enum):
 
 #: Statuses a node never leaves (D-6).
 TERMINAL = frozenset({Status.DONE, Status.RESOLVED, Status.DEFERRED, Status.ARCHIVED})
-#: Statuses that satisfy a dependency (D-6).
+#: Statuses that satisfy a dependency (D-6). `archived`/`deferred` do NOT — an abandoned
+#: prerequisite blocks its dependents (AC-15), released only by an explicit `wg_remove_dep` (D-16).
 TERMINAL_GOOD = frozenset({Status.DONE, Status.RESOLVED})
+#: Child statuses that do NOT block a gated parent's sign-off (AC-20, D-17): terminal-good plus
+#: `archived`. `archived` = explicitly removed from this epic's scope, so it is not "owed" work the
+#: parent's `done` would overclaim; `deferred` (postponed but still in scope) is absent, so it still
+#: blocks. Deliberately *wider* than TERMINAL_GOOD — the dependency axis and the parent-rollup axis
+#: are different judgments (archived blocks the former, not the latter).
+ROLLUP_SETTLED = TERMINAL_GOOD | {Status.ARCHIVED}
 #: Active (non-terminal) statuses.
 NON_TERMINAL = frozenset(
     {Status.TRIAGE, Status.READY, Status.ACTIVE, Status.AWAITING_SIGNOFF, Status.BLOCKED}

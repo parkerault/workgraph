@@ -282,6 +282,36 @@ def test_parent_signoff_ok_when_children_terminal_good():
     assert L.transition(g, "m", "signoff", PLAN, who="p", at="t").nodes["m"].status == S.DONE
 
 
+def test_parent_signoff_ok_when_child_archived():
+    # `archived` = explicitly removed from scope (e.g. a superseded-and-rebuilt epic's old
+    # children) — it is not "owed" work, so it must NOT block the parent's sign-off (AC-20).
+    g = gw(
+        nd("m", "command", status=S.AWAITING_SIGNOFF),
+        nd("c", "command", status=S.ARCHIVED, parent="m"),
+    )
+    assert L.transition(g, "m", "signoff", PLAN, who="p", at="t").nodes["m"].status == S.DONE
+
+
+def test_parent_signoff_ok_when_child_archived_alongside_done():
+    g = gw(
+        nd("m", "command", status=S.AWAITING_SIGNOFF),
+        nd("old", "command", status=S.ARCHIVED, parent="m"),
+        nd("new", "command", status=S.DONE, parent="m"),
+    )
+    assert L.transition(g, "m", "signoff", PLAN, who="p", at="t").nodes["m"].status == S.DONE
+
+
+def test_parent_signoff_blocked_when_child_deferred():
+    # `deferred` = postponed but still in scope / still owed — it DOES block, else the parent's
+    # `done` would overclaim the deferred child (the exact "deferred mistaken for done" failure).
+    g = gw(
+        nd("m", "command", status=S.AWAITING_SIGNOFF),
+        nd("c", "command", status=S.DEFERRED, parent="m"),
+    )
+    with pytest.raises(ValidationError):
+        L.transition(g, "m", "signoff", PLAN, who="p", at="t")
+
+
 # ---- unblock (deterministic routing) ---------------------------------------
 
 def test_unblock_routes_to_ready_when_deps_good():

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from .errors import IllegalTransition, SurfaceDenied, ValidationError
 from .models import (
     NON_TERMINAL,
+    ROLLUP_SETTLED,
     TERMINAL,
     TERMINAL_GOOD,
     Gate,
@@ -145,8 +146,13 @@ def transition(graph: Graph, node_id: str, action: str, surface: str, **args) ->
     if action == "signoff":
         if not args.get("who") or not args.get("at"):
             raise ValidationError(node_id, "signoff", "signoff requires who and at")
-        if any(c.status not in TERMINAL_GOOD for c in _children(g, node_id)):
-            raise ValidationError(node_id, "children", "child work is not terminal-good (AC-20)")
+        if any(c.status not in ROLLUP_SETTLED for c in _children(g, node_id)):
+            raise ValidationError(
+                node_id,
+                "children",
+                "a child is unsettled — every child must be terminal-good or archived "
+                "(a deferred child is still owed and blocks; AC-20)",
+            )
         node.signoff = Signoff(who=args["who"], at=args["at"], note=args.get("note"))
     elif action == "resolve":
         if not node.rationale:
