@@ -108,7 +108,7 @@ def test_mermaid_handler_returns_mermaid(tmp_path):
     s = Service(str(tmp_path))
     s.ingest([{"id": "a", "gate": {"kind": "none"}}])
     out = tool_handlers(s)["wg_mermaid"]({})
-    assert out["mermaid"].startswith("graph TD") and 'a["' in out["mermaid"]
+    assert out["mermaid"].startswith("graph LR") and 'a["' in out["mermaid"]  # edgeless -> auto LR
 
 
 def test_handlers_cover_exactly_the_manifest(tmp_path):

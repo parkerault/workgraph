@@ -27,7 +27,7 @@ def test_mermaid_subcommand_prints_mermaid(tmp_path, capsys):
     rc = main(["mermaid", str(tmp_path)])
     assert rc == 0
     out = capsys.readouterr().out
-    assert out.startswith("graph TD") and 'a["' in out
+    assert out.startswith("graph LR") and 'a["' in out  # single edgeless node -> auto LR
 
 
 def test_mermaid_status_flag_accepts_multiple_states(tmp_path, capsys):

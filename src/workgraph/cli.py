@@ -23,7 +23,11 @@ def main(argv: list[str] | None = None) -> int:
 
     p_mermaid = sub.add_parser("mermaid", help="print the graph (or a slice) as mermaid text")
     p_mermaid.add_argument("path", nargs="?", default=".", help="store root (default: cwd)")
-    p_mermaid.add_argument("--direction", default="TD", help="TD or LR (default TD)")
+    p_mermaid.add_argument(
+        "--direction",
+        default="auto",
+        help="TD, LR, or auto (default: auto — LR for an edgeless slice, e.g. a status query, else TD)",
+    )
     p_mermaid.add_argument("--parent", help="slice: a parent id and its children")
     p_mermaid.add_argument("--status", help="slice: nodes in this state, or several comma-separated (e.g. active,ready,blocked)")
     p_mermaid.add_argument("--node", help="slice: center node for a neighborhood view")

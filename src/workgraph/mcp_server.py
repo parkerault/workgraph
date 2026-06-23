@@ -77,7 +77,7 @@ def tool_handlers(service: Service) -> dict[str, Callable[[dict], dict]]:
         "wg_show": lambda a: service.show(a["id"]),
         "wg_ready": lambda a: {"ready": service.ready()},
         "wg_mermaid": lambda a: service.mermaid(
-            direction=a.get("direction", "TD"),
+            direction=a.get("direction", "auto"),
             parent=a.get("parent"),
             status=a.get("status"),
             node=a.get("node"),
@@ -157,7 +157,7 @@ def tool_schemas() -> dict[str, dict]:
         "wg_ready": _obj({}),
         "wg_mermaid": _obj(
             {
-                "direction": {"type": "string", "enum": ["TD", "LR"], "description": "layout direction (default TD)"},
+                "direction": {"type": "string", "enum": ["TD", "LR", "auto"], "description": "layout direction; default 'auto' = LR for an edgeless slice (e.g. a status query → vertical column), else TD"},
                 "parent": {"type": "string", "description": "slice: a parent id -> it and its children"},
                 "status": {"type": "string", "description": "slice: only nodes in this state — or several comma-separated (e.g. 'active,ready,blocked'). One of: " + ", ".join(s.value for s in Status)},
                 "node": {"type": "string", "description": "slice: center node for a dependency-neighborhood view"},
@@ -219,7 +219,8 @@ _DESCRIPTIONS = {
         "Render the graph (or a slice) as mermaid `graph` text, with each node's status baked into "
         "its label. Slice with `parent` (it + its children), `status` (nodes in that state, or "
         "several comma-separated), or `node`+`depth` (dependency neighborhood); default is the whole "
-        "graph. Read-only — the caller "
+        "graph. Layout auto-selects LR for an edgeless slice (a vertical column — terminal-friendly) "
+        "and TD otherwise; override with `direction`. Read-only — the caller "
         "renders the text itself (e.g. pipe it to the `mermaid-ascii` binary for a terminal view, or "
         "embed it in a doc)."
     ),

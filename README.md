@@ -102,6 +102,11 @@ is just the terminal renderer. Prefer slices for large graphs (the ASCII rendere
 terminal width), and embed the mermaid (not the ASCII) in committed docs — it diffs cleanly and
 renders in-place.
 
+Layout direction auto-selects per slice: a **disconnected** set (e.g. a `--status` query) renders
+`LR`, which stacks the nodes into a **vertical column** that fits a terminal — a `TD` graph would
+sprawl them horizontally — while a connected dependency graph renders `TD` (chains run top-to-bottom).
+Override anytime with `--direction TD|LR`.
+
 ## Provenance
 
 Every transition stamps the touched node with `updated_at` and `updated_by`. Pass `who` on any

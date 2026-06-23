@@ -29,6 +29,20 @@ def test_direction_lr():
     assert render.to_mermaid(g(nd("a")), direction="LR").splitlines()[0] == "graph LR"
 
 
+def test_auto_direction_lr_for_disconnected_td_for_connected():
+    # a disconnected slice (e.g. a status query) sprawls horizontally under TD; auto picks LR so
+    # mermaid-ascii stacks the nodes into a vertical column.
+    disc = render.to_mermaid(
+        g(nd("a", Status.ACTIVE), nd("b", Status.ACTIVE), nd("c", Status.ACTIVE)), status="active"
+    )
+    assert disc.splitlines()[0] == "graph LR"
+    # a connected slice keeps TD (dependency chains run top-to-bottom)
+    conn = render.to_mermaid(g(nd("a", Status.DONE), nd("b", Status.READY, deps=["a"])))
+    assert conn.splitlines()[0] == "graph TD"
+    # explicit direction always wins over auto
+    assert render.to_mermaid(g(nd("a")), direction="TD").splitlines()[0] == "graph TD"
+
+
 def test_status_baked_into_label():
     assert "[blocked]" in render.to_mermaid(g(nd("x", Status.BLOCKED)))
 
@@ -70,7 +84,7 @@ def test_edges_only_within_slice():
 
 
 def test_empty_slice_is_just_the_header():
-    assert render.to_mermaid(g(nd("a", Status.DONE)), status="blocked").strip() == "graph TD"
+    assert render.to_mermaid(g(nd("a", Status.DONE)), status="blocked").strip() == "graph LR"  # edgeless -> auto LR
 
 
 def test_node_order_is_stable_insertion_order():

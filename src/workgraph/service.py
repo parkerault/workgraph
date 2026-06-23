@@ -117,7 +117,7 @@ class Service:
 
     def mermaid(
         self,
-        direction: str = "TD",
+        direction: str = "auto",
         parent: str | None = None,
         status: str | None = None,
         node: str | None = None,

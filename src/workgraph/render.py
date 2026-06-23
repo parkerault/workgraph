@@ -46,7 +46,7 @@ def _select(graph: Graph, parent, status, node, depth) -> set[str]:
 def to_mermaid(
     graph: Graph,
     *,
-    direction: str = "TD",
+    direction: str = "auto",
     parent: str | None = None,
     status: str | None = None,
     node: str | None = None,
@@ -54,16 +54,27 @@ def to_mermaid(
 ) -> str:
     """Render the selected slice as mermaid. Selectors (first non-None wins): `parent` (it + its
     children), `status` (nodes in that state), `node`+`depth` (dependency neighborhood); default is
-    the whole graph. Edges are emitted only when both endpoints are in the slice."""
+    the whole graph. Edges are emitted only when both endpoints are in the slice.
+
+    `direction` is `TD` / `LR`, or `auto` (default): a slice with **no** in-slice edges — e.g. a
+    status query of unrelated nodes — renders `LR`, which stacks the independent nodes into a
+    vertical column (terminal-friendly); a connected slice renders `TD` (dependency chains run
+    top-to-bottom). An explicit `TD`/`LR` always wins."""
     ids = _select(graph, parent, status, node, depth)
+    edges = [
+        (d, nid)
+        for nid, n in graph.nodes.items()
+        if nid in ids
+        for d in n.deps
+        if d in ids
+    ]
+    if direction == "auto":
+        direction = "TD" if edges else "LR"
     lines = [f"graph {direction}"]
     for nid, n in graph.nodes.items():
         if nid in ids:
             label = f"{nid} [{n.status.value}]".replace('"', "'")
             lines.append(f'{nid}["{label}"]')
-    for nid, n in graph.nodes.items():
-        if nid in ids:
-            for d in n.deps:
-                if d in ids:
-                    lines.append(f"{d} --> {nid}")
+    for d, nid in edges:
+        lines.append(f"{d} --> {nid}")
     return "\n".join(lines) + "\n"
